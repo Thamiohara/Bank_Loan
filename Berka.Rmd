@@ -1,0 +1,469 @@
+---
+title: "R Notebook"
+output:
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+Libraries, Data bases and Data Normalization
+
+
+```{r}
+library("tidyverse")
+library("dplyr")
+library("tidyr")
+library("stringr")
+library("lubridate")
+library("readr")
+library("ggplot2")
+library("scales")  
+```
+
+```{r}
+account <- read.csv2('C:/Users/thami/OneDrive/Desktop/Berka/account.asc', sep = ';', stringsAsFactor = FALSE)
+```
+
+```{r}
+  account %>% mutate(frequency = if_else(frequency == "POPLATEK MESICNE","Monthly Issuance",
+                                       if_else(frequency == "POPLATEK TYDNE", "Weekly Issuance",
+                                               if_else(frequency == "POPLATEK PO OBRATU", "Issuance After Transaction","")))) %>% 
+  mutate(date = ymd((str_c("19",date)))) -> account
+
+account <- rename(account, date_account = date)
+
+```
+
+```{r}
+View(account)
+```
+
+```{r}
+client <- read.csv2('C:/Users/thami/OneDrive/Desktop/Berka/client.asc', sep = ';', stringsAsFactor = FALSE)
+```
+
+```{r}
+  client %>% mutate(year_birth = str_c("19",str_sub(birth_number,1,2)),
+                    month_birth = str_sub(birth_number,3,4),
+                    day_birth = str_sub(birth_number,5,6)) %>%
+    mutate(client_sex = if_else(month_birth > 50 , "F","M")) %>%
+    mutate(month_birth = if_else(client_sex == "M" ,month_birth, ifelse((as.numeric(month_birth) - 50) < 10 ,str_c("0",(as.numeric(month_birth) - 50)),(as.numeric(month_birth) - 50)))) %>%
+    mutate(birth_date = ymd(str_c(year_birth,month_birth,day_birth, sep = "-"))) %>%
+    select(client_id,birth_date,client_sex,district_id) -> client
+
+```
+
+```{r}
+View(client)
+str(client)
+```
+```{r}
+disposition <- read.csv2('C:/Users/thami/OneDrive/Desktop/Berka/disp.asc', sep = ';', stringsAsFactor = FALSE)
+```
+
+```{r}
+  disposition <- rename( disposition, client_type = type)
+
+
+View(disposition)
+
+```
+
+```{r}
+order <- read.csv2('C:/Users/thami/OneDrive/Desktop/Berka/order.asc', sep = ';', stringsAsFactor = FALSE)
+```
+
+```{r}
+order %>% mutate( tp_payment = if_else(k_symbol == "POJISTNE", "Insurrance",
+                                 if_else(k_symbol == "SIPO", "Household Payment",
+                                 if_else(k_symbol == "LEASING", "Leasing",
+                                 if_else(k_symbol == "UVER", "Loan Payment","Other"))))) %>%
+     select(-k_symbol) -> order
+
+View(order)
+```
+
+```{r}
+transaction <- read.csv2('C:/Users/thami/OneDrive/Desktop/Berka/trans.asc', sep = ';', stringsAsFactor = FALSE)
+```
+
+```{r}
+transaction %>% 
+    mutate(date = ymd((str_c("19",date)))) %>%
+    mutate(type = if_else(type == "PRIJEM", "Credit",
+    if_else(type == "VYDAJ","Withdrawal",if_else(type == "VYBER","Withdrawal","")))) %>%
+    mutate(operation = if_else( operation == "VYBER KARTOU" , "Credit Card Withdrawal",
+                       if_else( operation == "VKLAD", "Credit in Cash",
+                       if_else( operation == "PREVOD Z UCTU", "Collection from Another Bank",
+                       if_else( operation == "VYBER", "Withdrawal in Cash",
+                       if_else( operation == "PREVOD NA UCET", "Remittance to Another Bank","")))))) %>%
+    mutate(tp_payment = if_else(k_symbol == "POJISTNE", "Insurrance",
+                        if_else(k_symbol == "SLUZBY", "Payment for Statement",
+                        if_else(k_symbol == "UROK", "Interest Credited",
+                        if_else(k_symbol == "SANKC. UROK", "Sanction Interest if Negative",
+                        if_else(k_symbol == "SIPO", "Household Payment",
+                        if_else(k_symbol == "DUCHOD", "Old-Age Pension",
+                        if_else(k_symbol == "UVER", "Loan Payment","")))))))) %>%
+    select(-k_symbol)-> transaction
+
+    transaction <- rename(transaction, date_trans = date )
+
+    View(transaction)
+```
+
+```{r}
+loan <- read.csv2('C:/Users/thami/OneDrive/Desktop/Berka/loan.asc', sep = ';', stringsAsFactor = FALSE)
+```
+
+```{r}
+ loan %>%
+    mutate(date = ymd((str_c("19",date)))) %>%
+    mutate(status_descr = if_else(status == "A","A. Contract Finished, no problems",
+                          if_else(status == "B","B. Contract Finished, Loan not Payed",
+                          if_else(status == "C","C. Running Contract, OK so far",
+                          if_else(status == "D","D. Running Contract, Client in Debt",""))))) %>%
+    mutate(status_descr = as.factor(status_descr))-> loan
+
+  loan <- rename(loan, date_loan = date)
+  
+  View(loan)
+```
+
+```{r}
+card <- read.csv2('C:/Users/thami/OneDrive/Desktop/Berka/card.asc', sep = ';', stringsAsFactor = FALSE)
+```
+
+```{r}
+  card %>%
+    mutate(issued = ymd(str_c("19",str_replace(issued," 00:00:00","")))) %>%
+    mutate(type = factor(type, levels = c('junior','classic','gold'), ordered = TRUE)) -> card
+    
+  card <- rename(card, card_type = type)
+  
+
+summary(card)
+View(card)
+```
+```{r}
+district <- read.csv2('C:/Users/thami/OneDrive/Desktop/Berka/district.asc', sep = ';', stringsAsFactor = FALSE)
+```
+
+```{r}
+column <- c(1:16)
+  column <- str_c("A",column)
+
+
+  district %>%
+    mutate(district_id = A1) %>%
+    mutate(district_name = A2) %>%
+    mutate(region = A3) %>%
+    mutate(n_inhabitants = A4) %>%
+    mutate(n_munic_inhabitants_less_499 = A5) %>%
+    mutate(n_munic_inhabitants_500_to_1999 = A6) %>%
+    mutate(n_munic_inhabitants_2000_to_9999 = A7) %>%
+    mutate(n_munic_inhabitants_more_10000 = A8) %>%
+    mutate(n_of_cities = A9) %>%
+    mutate(ratio_urban_inhabitants = A10) %>%
+    mutate(avg_salary = A11) %>%
+    mutate(unemploymant_rate_95 = A12) %>%
+    mutate(unemploymant_rate_96 = A13) %>%
+    mutate(n_enterpreneurs_per_1000 = A14) %>%
+    mutate(n_commited_crimes_95 = A15) %>%
+    mutate(n_commited_crimes_96 = A16) %>%
+    select(- column) -> district 
+  
+  View(district)
+```
+
+```{r}
+account <- tibble(account)
+  client <- tibble(client)
+  disposition <- tibble(disposition)
+  order <- tibble(order)
+  transaction <- tibble(transaction)
+  loan <- tibble(loan)
+  card <- tibble(card)
+  district <- tibble(district)
+```
+
+Data Mining and Analysis
+
+```{r}
+group_by(client)%>%
+  summarise (qtde_client = n())
+```
+
+```{r}
+client %>% count(client_sex) 
+```
+
+```{r}
+dbdate <- ymd('1998-12-31')]
+
+clientage = client %>% mutate(client_age = year(as.period(interval(start = birth_date, end = dbdate)))) 
+summary(clientage$client_age)
+
+```
+
+```{r}
+hist(clientage$client_age) 
+```
+
+```{r}
+account %>%
+    left_join(disposition, by = 'account_id') %>%
+    left_join(district, by = 'district_id') %>%
+    rename(account_district_name = district_name, account_region = region, account_district_id = district_id) %>%
+    left_join(client, by = 'client_id') %>%
+    left_join(district, by = 'district_id') %>%
+    rename(client_district_name = district_name, client_region = region, client_district_id = district_id) %>%
+    select(account_id,
+           frequency,
+           date_account,
+           account_district_id,
+           account_district_name,
+           account_region,
+           disp_id,
+           client_type,
+           client_id,
+           birth_date,
+           client_sex,
+           client_district_id,
+           client_district_name,
+           client_region) -> tb_account_client
+
+View(tb_account_client)
+```
+
+```{r}
+client_district <- left_join(client, district, by = 'district_id')
+View(client_district)
+```
+
+```{r}
+client_district %>% count(district_name) %>% arrange(desc(n))
+```
+
+
+```{r}
+client_district %>% count(region) %>% arrange(desc(n))
+```
+
+```{r}
+boxplot(avg_salary ~ region, data = district) 
+```
+
+```{r}
+cli_dist_disp <- left_join(client_district, disposition, by = 'client_id')
+View(cli_dist_disp)
+```
+
+```{r}
+client_card_all <- full_join(cli_dist_disp, card, by = 'disp_id')
+View(client_card_all)
+```
+
+```{r}
+client_card_all <- mutate(client_card_all, havecard = if_else(is.na(card_id), 'no card', as.character(card_type)))
+View(client_card_all)
+```
+
+```{r}
+client_card_all %>% mutate(contagem = 1) %>% group_by(region, havecard) %>% summarise(contagem = sum(contagem)) %>%
+  ggplot(aes(x = region, y = contagem, fill = havecard)) + geom_bar(stat = "identity") 
+```
+
+```{r}
+client_card_all %>% filter(havecard == 'classic' | havecard == 'gold' | havecard == 'junior') %>% mutate(contagem = 1) %>% 
+  group_by(region, havecard) %>% summarise(total = sum(contagem)) %>% ggplot(aes(x = region, y = total, fill = havecard)) + geom_bar(stat = "identity", position = 'fill') 
+```
+
+```{r}
+client_loan <- inner_join(cli_dist_disp, loan, by = 'account_id')
+
+client_loan <- filter(client_loan, client_type == 'OWNER')
+
+View(client_loan)
+```
+
+```{r}
+client_loan_all <- full_join(cli_dist_disp, loan, by = 'account_id')
+
+client_loan_all <- filter(client_loan_all, client_type == 'OWNER') # Filtragem por titular por 'Owner', somente owners poder pedir Loan
+
+client_loan_all <- mutate(client_loan_all, haveloan = if_else(is.na(loan_id), 'FALSE', 'TRUE')) # Identificando que tem LOAN ID e quem não tem
+
+client_loan_all <- mutate(client_loan_all, haveloan2 = if_else(is.na(loan_id), 'no loan', as.character(status_descr))) # Identificando quem tem loan e qual o status e quem não tem loan
+
+View(client_loan_all)
+```
+
+```{r}
+tb_account_client %>% 
+    left_join(card, by = 'disp_id') %>%
+    left_join(loan, by = 'account_id') -> tb_account_client_card_loan
+
+View(tb_account_client_card_loan)
+```
+
+```{r}
+group_by (loan) %>%
+  summarise (qtde_loan = n())
+```
+
+```{r}
+client_loan_all %>% mutate(contagem = 1) %>% group_by(region, haveloan) %>% summarise(contagem = sum(contagem)) %>%
+  ggplot(aes(x = region, y = contagem, fill=haveloan)) + geom_bar(stat = "identity")  
+```
+
+```{r}
+summary(loan)
+```
+```{r}
+ ggplot (data = filter(tb_account_client_card_loan, 
+                      client_type == 'OWNER' &
+                      !is.na(loan_id == FALSE)), 
+          aes(x = status)) + 
+  geom_bar (mapping =  aes (fill = client_sex), 
+            position = 'dodge' , 
+            color = 'black') +
+  ggtitle('Qty Customers By Status and Sex') +
+  xlab('Status') +
+  ylab('Qty')
+```
+```{r}
+filter(tb_account_client_card_loan, client_type == 'OWNER' & !is.na(loan_id == TRUE)) %>%
+   group_by(status, client_sex) %>%
+   summarise(qtde = n())
+```
+
+
+```{r}
+  mutate(tb_account_client_card_loan, 
+         status_card = ifelse (is.na(card_id) == TRUE, 
+                               'No_Card', 'Yes_Card')) -> tb_account_client_card_loan
+```
+
+```{r}
+ggplot (data = filter(tb_account_client_card_loan, 
+                        client_type == 'OWNER' &
+                          !is.na(loan_id == FALSE)), aes(x = status)) + 
+    geom_bar (mapping =  aes (fill = client_sex),
+              position = 'dodge', 
+              color = 'black') + 
+    facet_wrap(~ status_card, nrow = 2) +
+    ggtitle('Qty Customers by Sex and Status') +
+    xlab('Status')+
+    ylab('Qty')
+```
+```{r}
+filter(tb_account_client_card_loan, status %in% c('A','C'))  %>%
+  group_by (status_card) %>%
+  summarise (qtde = n())
+```
+
+```{r}
+ggplot (data = filter (tb_account_client_card_loan, status %in% c('A','C') &
+                         status_card == 'Yes_Card'),
+        aes(x = card_type)) + 
+  geom_bar (mapping =  aes (fill = client_sex),
+            position = 'dodge', 
+            color = 'black') +
+  ggtitle('Qty Customers by Credit Card Type') +
+  xlab('Card Type')+
+  ylab('Qty')
+```
+
+```{r}
+  filter(tb_account_client_card_loan, status %in% c('A','C') & status_card == 'Yes_Card')  %>%
+  group_by (card_type) %>%
+  summarise (qtde = n())
+```
+
+
+```{r}
+filter(tb_account_client_card_loan, status %in% c('B','D'))  %>%
+  group_by (status_card) %>%
+  summarise (qtde = n())
+```
+
+```{r}
+loan %>% 
+  filter(status == 'B') %>%
+  mutate(date_end = date_loan + months(duration)) -> rec_loan 
+
+View(rec_loan)
+
+str(transaction)
+transaction$amount <- as.numeric(transaction$amount)
+
+transaction %>%
+  filter(tp_payment == 'Loan Payment') %>%
+  group_by(account_id) %>%
+  summarise(total_payed = sum(amount)) -> loan_payment
+View(loan_payment)
+
+transaction %>%
+  filter(tp_payment == 'Loan Payment') %>%
+  group_by(account_id) %>%
+  count(account_id) %>%
+  rename(parc_payed = n)-> loan_qntd
+
+transaction %>%
+  filter(tp_payment == 'Loan Payment') %>%
+  group_by(account_id,amount) %>%
+  count(account_id) %>%
+  select(-n ) %>%
+  rename(parc= amount)-> loan_parc
+
+rec_loan %>% 
+  left_join(loan_payment, by = 'account_id') %>%
+  left_join(loan_qntd, by = 'account_id') %>%
+  left_join(loan_parc, by = 'account_id') %>%
+  mutate(parc_overdue = duration - parc_payed ) %>%
+  mutate(value_overdue = parc_overdue * parc) %>%
+  arrange(desc(value_overdue)) -> rec_loan
+
+rec_loan %>% group_by(account_id) %>% summarise(date_end_loan = max(date_end)) -> clients_loan 
+
+transaction %>%
+  inner_join(clients_loan, by = 'account_id') %>%
+  filter(date_trans >= date_end_loan) %>%
+  group_by(account_id,type) %>%
+  summarise(value = sum(amount)) %>%
+  spread(key = type, value = value) %>%
+  mutate(total_after = Credit - Withdrawal) -> values_after
+
+rec_loan %>%
+  left_join(values_after, by = 'account_id') %>%
+  mutate(analise_1 = if_else(total_after >= value_overdue,"Can Payment","Can't Pay")) %>%
+  mutate(analise_2 = if_else(total_after >= 0,"Can Pay","Can't Pay")) -> rec_loan
+
+max <- rec_loan
+
+rec_loan %>%
+  group_by(analise_2) %>%
+  summarise(max_value = sum(value_overdue)) 
+
+
+
+```
+
+```{r}
+rec_loan %>%
+  group_by(analise_2) %>%
+  ggplot(mapping = aes(x = analise_2, y = value_overdue, fill = analise_2)) +
+  geom_bar(alpha = 1/2, stat = "identity", show.legend = FALSE) +
+  scale_y_continuous(labels = comma_format(big.mark = ".",
+                                           decimal.mark = ",")) +
+  labs(title = "Delinquency Portfolio- Possibility of Recovery",
+       x = "Analysis",
+       y = "Debt Balance",
+       subtitle = NULL) +
+  theme(plot.title = element_text(size=14, face="bold"),
+        axis.title.x = element_text(size=14, face="bold"),
+        axis.title.y = element_text(size=14, face="bold"))
+
+```
+
